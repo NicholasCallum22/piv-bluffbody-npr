@@ -1,2 +1,22 @@
-# piv-bluffbody-npr
-PIV processing and CFD–experiment correlation for a canonical bluff‑body wake. Tutorial, synthetic tests, and reproducible workflows.
+piv-bluffbody-npr/
+├─ README.md
+├─ LICENSE
+├─ .gitignore
+├─ requirements.txt
+├─ 0_docs/
+│  ├─ technical_appendix.md
+│  └─ uncertainty_note.md
+├─ 1_tutorial_piv/
+│  ├─ data/
+│  │  └─ README.md
+│  ├─ scripts/
+│  │  └─ piv_tutorial_min.py
+│  └─ notebooks/
+│     └─ piv_tutorial.ipynb
+├─ 2_synthetic_piv/
+│  ├─ scripts/
+│  │  └─ synthetic_piv_min.py
+│  └─ notebooks/
+├─ figures/
+└─ .github/
+   └─ CONTRIBUTING.md
