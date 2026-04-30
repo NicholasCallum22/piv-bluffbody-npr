@@ -1,68 +1,75 @@
-#!/usr/bin/env python3
-"""
-Generate synthetic PIV image pairs and analytic velocity field
-based on metadata YAML. Deterministic when random_seed is set.
-This is a minimal, well-documented stub to be expanded in Week 1.
-"""
-import argparse
-import json
-import os
+"""Deterministic synthetic PIV pair generator for tests and smoke runs."""
 from pathlib import Path
-import yaml
 import numpy as np
 from PIL import Image
+import yaml
 
-def analytic_velocity_field(metadata):
-    # Example: simple linear shear in x-direction
-    res = metadata["acquisition"]["camera"]["resolution"]
-    max_u = metadata["ground_truth"]["parameters"]["max_velocity_m_s"]
-    ny, nx = res[1], res[0]
-    y = np.linspace(0, 1, ny)
-    u = np.tile(max_u * y[:, None], (1, nx))
-    v = np.zeros_like(u)
-    return {"u": u, "v": v}
-
-def synthesize_images(metadata, out_dir):
-    res = metadata["acquisition"]["camera"]["resolution"]
-    seed = int(metadata.get("random_seed", 0))
+def generate_particles(shape, n_particles, seed=0, psf_sigma=1.0):
     rng = np.random.default_rng(seed)
-    # simple particle field: random dots blurred to approximate particles
-    nx, ny = res
-    img1 = np.zeros((ny, nx), dtype=np.uint16)
-    img2 = np.zeros_like(img1)
-    # particle count proportional to concentration
-    concentration = metadata["seeding"]["concentration_ppp"]
-    n_particles = int(concentration * nx * ny)
-    xs = rng.integers(0, nx, size=n_particles)
-    ys = rng.integers(0, ny, size=n_particles)
-    for x, y in zip(xs, ys):
-        img1[y, x] = min(255, img1[y, x] + 200)
-    # simple advection: shift by a small integer amount derived from analytic field
-    u_field = analytic_velocity_field(metadata)["u"]
-    shift_x = int(np.round(np.mean(u_field) * 10))  # toy mapping to pixels
-    img2 = np.roll(img1, shift=shift_x, axis=1)
-    # add gaussian noise
-    noise_level = 5
-    img1 = np.clip(img1, 0, 255).astype(np.uint8)
-    img2 = np.clip(img2 + rng.normal(0, noise_level, img2.shape), 0, 255).astype(np.uint8)
-    Path(out_dir).mkdir(parents=True, exist_ok=True)
-    Image.fromarray(img1).save(Path(out_dir) / "frame_0001.png")
-    Image.fromarray(img2).save(Path(out_dir) / "frame_0002.png")
-    # save analytic field as JSON (downsampled)
-    gt = analytic_velocity_field(metadata)
-    np.save(Path(out_dir) / "gt_u.npy", gt["u"])
-    np.save(Path(out_dir) / "gt_v.npy", gt["v"])
-    return {"images": ["frame_0001.png", "frame_0002.png"], "gt": ["gt_u.npy", "gt_v.npy"]}
+    img = np.zeros(shape, dtype=np.float32)
+    ys = rng.integers(0, shape[0], size=n_particles)
+    xs = rng.integers(0, shape[1], size=n_particles)
+    for y, x in zip(ys, xs):
+        img[y, x] += 1.0
+    # simple gaussian PSF via convolution
+    try:
+        from scipy.ndimage import gaussian_filter
+        img = gaussian_filter(img, sigma=psf_sigma)
+    except Exception:
+        # if scipy not available, apply a tiny local blur via simple kernel
+        kernel = np.array([[0.05,0.1,0.05],[0.1,0.4,0.1],[0.05,0.1,0.05]])
+        from scipy.signal import convolve2d as _conv  # will raise if scipy missing
+        img = _conv(img, kernel, mode='same', boundary='wrap')
+    # normalize to 0-255
+    img -= img.min()
+    if img.max() > 0:
+        img = img / img.max() * 255.0
+    return img.astype(np.uint8), np.column_stack((ys, xs))
+
+def shift_particles(img, coords, dy, dx):
+    h, w = img.shape
+    out = np.zeros_like(img, dtype=np.float32)
+    for (y, x) in coords:
+        ny = int(round(y + dy))
+        nx = int(round(x + dx))
+        if 0 <= ny < h and 0 <= nx < w:
+            out[ny, nx] += img[y, x]
+    try:
+        from scipy.ndimage import gaussian_filter
+        out = gaussian_filter(out, sigma=1.0)
+    except Exception:
+        pass
+    out -= out.min()
+    if out.max() > 0:
+        out = out / out.max() * 255.0
+    return out.astype(np.uint8)
+
+def save_pair(out_dir, name, img1, img2):
+    p = Path(out_dir)
+    p.mkdir(parents=True, exist_ok=True)
+    Image.fromarray(img1).save(p / f"{name}_a.png")
+    Image.fromarray(img2).save(p / f"{name}_b.png")
 
 def main():
-    p = argparse.ArgumentParser()
-    p.add_argument("--metadata", required=True)
-    p.add_argument("--out", required=True)
-    args = p.parse_args()
-    m = yaml.safe_load(open(args.metadata))
-    result = synthesize_images(m, args.out)
-    print(json.dumps(result))
+    cfg_path = Path("experiments/canonical_case/metadata.yaml")
+    if cfg_path.exists():
+        try:
+            cfg = yaml.safe_load(open(cfg_path)) or {}
+        except Exception:
+            cfg = {}
+    else:
+        cfg = {}
+    gen = cfg.get("generator", {})
+    # defaults
+    shape = tuple(gen.get("shape", [256, 256]))
+    n = int(gen.get("n_particles", 200))
+    seed = int(gen.get("seed", 42))
+    dy = float(gen.get("dy", 0.5))
+    dx = float(gen.get("dx", 1.2))
+    img1, coords = generate_particles(shape, n, seed=seed, psf_sigma=1.0)
+    img2 = shift_particles(img1, coords, dy, dx)
+    save_pair("data/canonical", "frame_0001", img1, img2)
+    print("Wrote data/canonical/frame_0001_a.png and _b.png")
 
 if __name__ == "__main__":
     main()
-
