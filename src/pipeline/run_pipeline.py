@@ -1,3 +1,4 @@
+from PIL import Image
 """
 Orchestration script to run the pipeline for a pair of frames using metadata
 """
@@ -59,5 +60,3 @@ if __name__ == "__main__":
     p.add_argument("--out", required=True)
     args = p.parse_args()
     print(run_pipeline(args.config, args.input, args.out))
-
-PY 
