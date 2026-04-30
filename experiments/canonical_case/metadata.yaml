@@ -1,0 +1,66 @@
+experiment_id: canonical_case_v1
+version: 1.0.0
+date: 2026-04-30
+author: Nischal
+description: >
+  Canonical PIV experiment for pipeline validation and uncertainty quantification.
+  Deterministic when random_seed is set. Includes acquisition, seeding, processing,
+  and uncertainty parameters used by tests and CI.
+
+flow:
+  type: laminar_shear
+  description: "Parallel plate shear with nominal Re=200; analytic velocity field available."
+
+acquisition:
+  camera:
+    model: "ExampleCam 2048"
+    resolution: [2048, 2048]
+    pixel_pitch_um: 5.86
+    lens: "50mm macro"
+    magnification: 0.5
+  timing:
+    frame_rate_hz: 500
+    delta_t_s: 0.002
+  illumination:
+    type: "laser_sheet"
+    thickness_mm: 1.0
+    energy_mJ_per_pulse: 5.0
+
+seeding:
+  particle_diameter_um:
+    median: 10
+    std: 2
+  concentration_ppp: 0.12
+  distribution: "lognormal"
+
+processing:
+  pipeline_version: 0.1.0
+  window_sizes_px: [64, 32, 16]
+  overlap_percent: 50
+  subpixel_method: "3pt_gaussian"
+  correlation_method: "fft"
+  validation:
+    snr_threshold: 1.5
+    peak_ratio: 1.2
+    adaptive_fallback: true
+  outlier_removal:
+    method: "local_median"
+    kernel_size: 3
+
+uncertainty:
+  method: "correlation_peak_width"
+  parameters:
+    bootstrap_samples: 100
+    confidence_level: 0.95
+
+ground_truth:
+  type: "analytic"
+  field: "laminar_shear_profile"
+  parameters:
+    max_velocity_m_s: 0.5
+
+random_seed: 42
+notes: >
+  This canonical YAML is the single source of truth for Week 0 tests and CI.
+  Use it to generate synthetic image pairs and to configure the pipeline run.
+

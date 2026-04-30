@@ -1,0 +1,35 @@
+name: Canonical Case CI
+
+on:
+  push:
+    paths:
+      - 'experiments/canonical_case/**'
+      - 'tests/**'
+  pull_request:
+    paths:
+      - 'experiments/canonical_case/**'
+      - 'tests/**'
+
+jobs:
+  canonical:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyyaml pytest pillow numpy
+      - name: Run metadata test
+        run: pytest -q tests/test_canonical_metadata.py
+      - name: Generate synthetic data
+        run: |
+          python experiments/canonical_case/generate_synthetic.py --metadata experiments/canonical_case/metadata.yaml --out data/canonical
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: canonical-data
+          path: data/canonical
